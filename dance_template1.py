@@ -2,6 +2,7 @@ from motor_test import test_motor
 import time
 from pymavlink import mavutil
 import numpy as np
+import socket
 
 
 def arm_rov(mav_connection):
@@ -69,67 +70,17 @@ if __name__ == "__main__":
     mav_connection.wait_heartbeat()
     # Arm the ROV and wait for confirmation
     arm_rov(mav_connection)
-
-    ####
-    # Run choreography
-    ####
-    """
-    Call sequence of calls to run_timed_motors to execute choreography
-    Motors power ranges from -100 to 100
-    1	Forward/Backward	-100	-100	100	100	0	0
-		                    100	100	-100	-100	0	0
-    2	Crab Left/Right	-100	100	-100	100	0	0
-		                100	-100	100	-100	0	0
-    3	Donut	50	100	-50	100	0	0
-    4	Reverse Donut	100	-50	100	50	0	0
-    5	Up/Down	0	0	0	0	100	100
-		        0	0	0	0	-100	-100
-    6	Clockwise/Counterclockwise	-100	100	100	-100	0	0
-		100	-100	-100	100	0	0"""
     
-    # corkscrew down
-    corkscrew(mav_connection, 5)
+    s = socket.socket()
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    port = 8400
+    #10.29.106.95
+    s.bind(("", port))
+
+    s.listen(5)
+
     
-    # forward
-    straight(mav_connection, 10, 1)
-    
-    # half reverse donut
-    donut(mav_connection, 12, True)
-    
-    #donut
-    donut(mav_connection, 21, False)    
-
-    # half reverse donut
-    donut(mav_connection, 10, True)
-
-    # backward
-    straight(mav_connection, 5,  -1)
-        
-    # crab right
-    crab(mav_connection, 10, -1)
-    
-    # half reverse donut
-    crab_donut(mav_connection, 12, True)
-
-    # donut
-    crab_donut(mav_connection, 21, False)
-
-    # half reverse donut
-    crab_donut(mav_connection, 10, True)
-
-    crab(mav_connection, 5)
-
-    # reverse donut
-    donut(mav_connection, 20, True)
-
-    #corkscrew
-    corkscrew(mav_connection, 5, -1)
-
-    # stop
-    run_motors_timed(mav_connection, seconds=1, motor_settings=[0, 0, 0, 0, 0, 0])
-    
-    ####
-    # Disarm ROV and exit
-    ####
-    disarm_rov(mav_connection)
+    # close the connection
+    s.close() 
 
