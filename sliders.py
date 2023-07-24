@@ -69,6 +69,11 @@ def update_m6(x, state):
     global motor_values
     motor_values[5] = x
 
+def update_m7(x, state):
+    global motor_values
+    motor_values[2] = x
+    motor_values[3] = x
+
 
 def call_motors(mav_connection):
     """
@@ -90,10 +95,11 @@ with gr.Blocks() as demo:
     slider_m4 = gr.Slider(-100, 100, step=1, value=0, label="Motor 4")
     slider_m5 = gr.Slider(-100, 100, step=1, value=0, label="Motor 5")
     slider_m6 = gr.Slider(-100, 100, step=1, value=0, label="Motor 6")
+    slider_m7 = gr.Slider(-100, 100, step=1, value=0, label="Forward")
 
     state = gr.State(value=0)
 
-    sliders = [slider_m1, slider_m2, slider_m3, slider_m4, slider_m5, slider_m6]
+    sliders = [slider_m1, slider_m2, slider_m3, slider_m4, slider_m5, slider_m6, slider_m7]
     # Attach a release event to each slider that updates the corresponding motor value
     slider_m1.release(
         update_m1, inputs=[slider_m1, state], outputs=[], api_name="m1_slider"
@@ -113,6 +119,7 @@ with gr.Blocks() as demo:
     slider_m6.release(
         update_m6, inputs=[slider_m6, state], outputs=[], api_name="m6_slider"
     )
+    slider_m7.release(update_m7, inputs=[slider_m7, state], outputs=[], api_name="m7_slider")
 
     # Add a button that stops all motors
     with gr.Row():
