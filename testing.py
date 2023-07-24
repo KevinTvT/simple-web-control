@@ -65,8 +65,8 @@ if __name__ == "__main__":
     ####
     # Initialize ROV
     ####
-    mav_connection = mavutil.mavlink_connection('udpin:0.0.0.0:14550')
-    mav_connection.wait_heartbeat(timeout=10)
+    mav_connection = mavutil.mavlink_connection('udpin:0.0.0.0:14550', udp_timeout=10)
+    mav_connection.wait_heartbeat()
     # Arm the ROV and wait for confirmation
     arm_rov(mav_connection)
     straight(mav_connection, 10)
