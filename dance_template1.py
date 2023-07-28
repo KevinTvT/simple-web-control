@@ -1,11 +1,15 @@
 from motor_test import test_motor
 import time
 from pymavlink import mavutil
-import numpy as np
 import socket
+import numpy as np
+
+
+is_armed = False
 
 
 def arm_rov(mav_connection):
+    global is_armed
     """
     Arm the ROV, wait for confirmation
     """
@@ -13,6 +17,8 @@ def arm_rov(mav_connection):
     print("Waiting for the vehicle to arm")
     mav_connection.motors_armed_wait()
     print("Armed!")
+    is_armed = True
+
 
 def disarm_rov(mav_connection):
     """
@@ -22,6 +28,7 @@ def disarm_rov(mav_connection):
     print("Waiting for the vehicle to disarm")
     mav_connection.motors_disarmed_wait()
     print("Disarmed!")
+
 
 def run_motors_timed(mav_connection, seconds: int, motor_settings: list) -> None:
     """
@@ -34,53 +41,78 @@ def run_motors_timed(mav_connection, seconds: int, motor_settings: list) -> None
     step = 0
     while step < seconds:
         for i in range(len(motor_settings)):
-            test_motor(mav_connection=mav_connection, motor_id=i, power=motor_settings[i])
+            test_motor(
+                mav_connection=mav_connection, motor_id=i, power=motor_settings[i]
+            )
         time.sleep(0.2)
         step += 0.2
 
-def straight(mav_connection, seconds: float, coeff:float=1):
-    power = coeff * [-100, -100, 100, 100, 0, 0]
-    run_motors_timed(mav_connection, seconds, power.tolist())
-
-def donut(mav_connection, seconds: float, reverse: bool):
-    power = [50, 100, -50, 100] if not reverse else [100, -50, 100, 50]
-    run_motors_timed(mav_connection, seconds, power)
-
-def crab_donut(mav_connection, seconds: float, reverse: bool):
-    power = [-50, 50, 100, 100] if not reverse else [100, -50, 50, 100]
-    run_motors_timed(mav_connection, seconds, power)
-
-def crab(mav_connection, seconds: float, coeff:float = 1):
-    power = coeff * [-100, 100, -100, 100, 0, 0]
-    run_motors_timed(mav_connection, seconds, power)
-
-def corkscrew(mav_connection, seconds: float, opposite: int=1):
-    power = int(opposite) * [-100, 100, 100, -100, -100, -100]
-    run_motors_timed(mav_connection, seconds, power)
-
-def spin(mav_connection, seconds: float, clockwise: int=1):
-    power = int(clockwise) * [100, -100, -100, 100, 0, 0]
-    run_motors_timed(mav_connection, seconds, power)
 
 if __name__ == "__main__":
     ####
     # Initialize ROV
     ####
-    mav_connection = mavutil.mavlink_connection('udpin:0.0.0.0:14550')
+    mav_connection = mavutil.mavlink_connection("udpin:0.0.0.0:14550")
     mav_connection.wait_heartbeat()
     # Arm the ROV and wait for confirmation
-    arm_rov(mav_connection)
-    
-    s = socket.socket()
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-    port = 8400
-    #10.29.106.95
-    s.bind(("", port))
+    ####
+    # Run choreography
+    ####
+    """
+    Call sequence of calls to run_timed_motors to execute choreography
+    Motors power ranges from -100 to 100
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(("", 8400))
+        s.listen()
+        conn, addr = s.accept()
+        while True:
+            try:
+                command = conn.recv(1024, socket.MSG_DONTWAIT).decode()
+            except:
+                if is_armed:
+                    run_motors_timed(mav_connection, 0.1, [0, 0, 0, 0, 0, 0])
+                continue
+            if command.strip() == "arm".lower():
+                arm_rov(mav_connection)
+                conn.send("Armed\n------------------------------------\n".encode())
+                conn.send(
+                    "Input formatting:\nFirst six numbers are powers to each thruster, last number is the duration of the command\nExample input: 100 100 100 -100 -100 -100 10\n".encode()
+                )
+            elif command.strip() == "disarm".lower():
+                disarm_rov(mav_connection)
+                conn.send("Disarmed\n------------------------------------\n".encode())
+            elif command.strip() == "close".lower():
+                break
+            else:
+                try:
+                    arr = np.array(command.split(" ")).astype(float)
+                except:
+                    conn.send(
+                        "Invalid input received\n------------------------------------\n".encode()
+                    )
+                    continue
 
-    s.listen(5)
+                if len(arr) != 7:
+                    conn.send(
+                        "Invalid # of parameters received\n------------------------------------\n".encode()
+                    )
+                    continue
 
-    
-    # close the connection
-    s.close() 
+                powers = arr[0 : len(arr)]
+                if arr[-1] <= 0:
+                    conn.send(
+                        "Time must be positive\n------------------------------------\n".encode()
+                    )
+                    continue
+                print("Powers: ", powers)
+                print("\n")
+                print("Time: ", arr[-1])
+                conn.send(
+                    "------------------------------------\nData received\n------------------------------------\n".encode()
+                )
 
+                run_motors_timed(mav_connection, arr[-1], powers.tolist())
+        s.close()
